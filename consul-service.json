@@ -1,0 +1,9 @@
+{
+  "service": {
+    "name": "postgis",
+    "port": 5432,
+    "terminate_on_leave": true,
+    "checks": [{"script": "PGPASSWORD=$POSTGRES_PASS psql -h 127.0.0.1 -U $POSTGRES_USER -l",
+                "interval": "10s"}]
+  }
+}
