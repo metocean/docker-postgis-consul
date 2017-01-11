@@ -4,7 +4,7 @@ if [[ "$@" == *"/bin/sh -c"* ]]; then
     if [ -z "$CONSULDATA" ]; then export CONSULDATA="/tmp/consul-data";fi
     if [ -z "$CONSULDIR" ]; then export CONSULDIR="/consul";fi
     if [ "$(ls -A $CONSULDIR)" ]; then
-        consul agent -data-dir=$CONSULDATA -config-dir=$CONSULDIR &
+        consul agent -data-dir=$CONSULDATA -config-dir=$CONSULDIR $CONSULOPTS &
     fi
     $@ &
     PID=$!
