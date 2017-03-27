@@ -77,8 +77,6 @@ echo "postgresql user: $POSTGRES_USER" > /tmp/PGPASSWORD.txt
 echo "postgresql password: $POSTGRES_PASS" >> /tmp/PGPASSWORD.txt
 su - postgres -c "$POSTGRES --single -D $DATADIR -c config_file=$CONF <<< \"CREATE USER $POSTGRES_USER WITH SUPERUSER ENCRYPTED PASSWORD '$POSTGRES_PASS';\""
 
-trap "echo \"Sending SIGTERM to postgres\"; kill -TERM $PG_PID" SIGTERM
-
 su - postgres -c "$POSTGRES -D $DATADIR -c config_file=$CONF $LOCALONLY &"
 sleep 1
 
@@ -89,7 +87,6 @@ until `nc -z 127.0.0.1 5432`; do
     sleep 1
 done
 echo "postgres ready"
-
 
 RESULT=`su - postgres -c "psql -l | grep postgis | wc -l"`
 if [[ ${RESULT} == '1' ]]
@@ -126,9 +123,9 @@ else
     fi
 
     # Needed when importing old dumps using e.g ndims for constraints
-    echo "Loading legacy sql"
-    su - postgres -c "psql template_postgis -f $SQLDIR/legacy_minimal.sql"
-    su - postgres -c "psql template_postgis -f $SQLDIR/legacy_gist.sql"
+    #echo "Loading legacy sql"
+    #su - postgres -c "psql template_postgis -f $SQLDIR/legacy_minimal.sql"
+    #su - postgres -c "psql template_postgis -f $SQLDIR/legacy_gist.sql"
     # Create a default db called 'gis' that you can use to get up and running quickly
     # It will be owned by the docker db user
     su - postgres -c "createdb -O $POSTGRES_USER -T template_postgis gis"
@@ -136,14 +133,24 @@ fi
 # This should show up in docker logs afterwards
 su - postgres -c "psql -l"
 
-PID=`cat /var/run/postgresql/9.5-main.pid`
-kill -TERM ${PID}
+wait_postgres () {
+    # Wait for background postgres main process to exit
+    while [ "$(ls -A /var/run/postgresql/9.5-main.pid 2>/dev/null)" ]; do
+        sleep 1
+    done
+}
 
-# Wait for background postgres main process to exit
-while [ "$(ls -A /var/run/postgresql/9.5-main.pid 2>/dev/null)" ]; do
-  sleep 1
-done
+stop_postgres () {
+    if [ "$(ls -A /var/run/postgresql/9.5-main.pid 2>/dev/null)" ]; then
+        kill -TERM `cat /var/run/postgresql/9.5-main.pid`
+    fi
+}
 
+kill -TERM `cat /var/run/postgresql/9.5-main.pid`
+wait_postgres
+trap 'stop_postgres' TERM
 echo "Postgres initialisation process completed .... restarting in foreground"
 SETVARS="POSTGIS_ENABLE_OUTDB_RASTERS=1 POSTGIS_GDAL_ENABLED_DRIVERS=ENABLE_ALL"
-su - postgres -c "$SETVARS $POSTGRES -D $DATADIR -c config_file=$CONF"
+su - postgres -c "$SETVARS $POSTGRES -D $DATADIR -c config_file=$CONF &"
+sleep 3
+wait_postgres
