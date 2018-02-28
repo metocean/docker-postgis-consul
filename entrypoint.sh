@@ -1,18 +1,16 @@
 #!/bin/bash
-
-
 if [[ "$@" == *"/bin/sh -c"* ]]; then
-    trap ' kill -TERM $PID' TERM INT
     if [ -z "$CONSULDATA" ]; then export CONSULDATA="/tmp/consul-data";fi
     if [ -z "$CONSULDIR" ]; then export CONSULDIR="/consul";fi
     if [ "$(ls -A $CONSULDIR)" ]; then
-        consul agent -node-id=$(uuidgen | awk '{print tolower($0)}') -data-dir=$CONSULDATA -config-dir=$CONSULDIR $CONSULOPTS &
+        consul agent -data-dir=$CONSULDATA -config-dir=$CONSULDIR $CONSULOPTS &
         CONSUL_PID=$!
         CONSUL_LEAVE='consul leave'
     fi
     CMD=$(echo -e $@ | sed -e 's/\/bin\/sh -c //')
     $CMD &
     PID=$!
+    trap 'kill -TERM $PID' TERM INT
     wait $PID
     trap - TERM INT
     wait $PID
