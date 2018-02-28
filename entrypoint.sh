@@ -6,7 +6,7 @@ if [[ "$@" == *"/bin/sh -c"* ]]; then
     if [ -z "$CONSULDATA" ]; then export CONSULDATA="/tmp/consul-data";fi
     if [ -z "$CONSULDIR" ]; then export CONSULDIR="/consul";fi
     if [ "$(ls -A $CONSULDIR)" ]; then
-        consul agent -data-dir=$CONSULDATA -config-dir=$CONSULDIR $CONSULOPTS &
+        consul agent -node-id=$(uuidgen | awk '{print tolower($0)}') -data-dir=$CONSULDATA -config-dir=$CONSULDIR $CONSULOPTS &
         CONSUL_PID=$!
         CONSUL_LEAVE='consul leave'
     fi
