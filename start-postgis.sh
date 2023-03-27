@@ -2,11 +2,11 @@
 
 # This script will run as the postgres user due to the Dockerfile USER directive
 
-DATADIR="/var/lib/postgresql/9.5/main"
-CONF="/etc/postgresql/9.5/main/postgresql.conf"
-POSTGRES="/usr/lib/postgresql/9.5/bin/postgres"
-INITDB="/usr/lib/postgresql/9.5/bin/initdb"
-SQLDIR="/usr/share/postgresql/9.5/contrib/postgis-2.2/"
+DATADIR="/var/lib/postgresql/13/data"
+CONF="/var/lib/postgresql/13/data/postgresql.conf"
+POSTGRES="/usr/lib/postgresql/13/bin/postgres"
+INITDB="/usr/lib/postgresql/13/bin/initdb"
+SQLDIR="/usr/share/postgresql/13/contrib/postgis-3.1/"
 LOCALONLY="-c listen_addresses='127.0.0.1, ::1'"
 
 # /etc/ssl/private can't be accessed from within container for some reason
@@ -16,10 +16,6 @@ chmod -R 0700 /etc/ssl
 chown -R postgres /tmp/ssl-copy
 rm -r /etc/ssl
 mv /tmp/ssl-copy /etc/ssl
-
-# Needed under debian, wasnt needed under ubuntu
-mkdir -p /var/run/postgresql/9.5-main.pg_stat_tmp
-chmod 0777 /var/run/postgresql/9.5-main.pg_stat_tmp
 
 # test if DATADIR is existent
 if [ ! -d $DATADIR ]; then
@@ -31,8 +27,8 @@ chown -R postgres:postgres $DATADIR
 
 # Note that $POSTGRES_USER and $POSTGRES_PASS below are optional paramters that can be passed
 # via docker run e.g.
-#docker run --name="postgis" -e POSTGRES_USER=qgis -e POSTGRES_PASS=qgis -d -v 
-#/var/docker-data/postgres-dat:/var/lib/postgresql -t qgis/postgis:6
+#docker run --name="postgis" -e POSTGRES_USER=qgis -e POSTGRES_PASSWORD=qgis -d -v 
+#/var/docker-data/postgres-dat:/var/lib/postgresql/data -t postgis/postgis:13-3.3
 
 # If you dont specify a user/password in docker run, we will generate one
 # here and create a user called 'docker' to go with it.
@@ -52,8 +48,8 @@ fi
 if [ -z "$POSTGRES_USER" ]; then
   POSTGRES_USER=docker
 fi  
-if [ -z "$POSTGRES_PASS" ]; then
-  POSTGRES_PASS=docker
+if [ -z "$POSTGRES_PASSWORD" ]; then
+  POSTGRES_PASSWORD=docker
 fi  
 # Enable hstore and topology by default
 if [ -z "$HSTORE" ]; then
@@ -67,15 +63,15 @@ fi
 # Usage is: docker run [...] -e ALLOW_IP_RANGE='192.168.0.0/16' 
 if [ "$ALLOW_IP_RANGE" ]
 then
-  echo "host    all             all             $ALLOW_IP_RANGE              md5" >> /etc/postgresql/9.5/main/pg_hba.conf
+  echo "host    all             all             $ALLOW_IP_RANGE              md5" >> /var/lib/postgresql/13/data/pg_hba.conf
 fi
 
-# redirect user/pass into a file so we can echo it into
+# redirect user/password into a file so we can echo it into
 # docker logs when container starts
 # so that we can tell user their password
 echo "postgresql user: $POSTGRES_USER" > /tmp/PGPASSWORD.txt
-echo "postgresql password: $POSTGRES_PASS" >> /tmp/PGPASSWORD.txt
-su - postgres -c "$POSTGRES --single -D $DATADIR -c config_file=$CONF <<< \"CREATE USER $POSTGRES_USER WITH SUPERUSER ENCRYPTED PASSWORD '$POSTGRES_PASS';\""
+echo "postgresql password: $POSTGRES_PASSWORD" >> /tmp/PGPASSWORD.txt
+su - postgres -c "$POSTGRES --single -D $DATADIR -c config_file=$CONF <<< \"CREATE USER $POSTGRES_USER WITH SUPERUSER ENCRYPTED PASSWORD '$POSTGRES_PASSWORD';\""
 
 su - postgres -c "$POSTGRES -D $DATADIR -c config_file=$CONF $LOCALONLY &"
 sleep 1
@@ -86,7 +82,7 @@ until `nc -z 127.0.0.1 5432`; do
     echo "$(date) - waiting for postgres (localhost-only)..."
     sleep 1
 done
-echo "postgres ready"
+# echo "postgres ready"
 
 RESULT=`su - postgres -c "psql -l | grep postgis | wc -l"`
 if [[ ${RESULT} == '1' ]]
@@ -135,18 +131,18 @@ su - postgres -c "psql -l"
 
 wait_postgres () {
     # Wait for background postgres main process to exit
-    while [ "$(ls -A /var/run/postgresql/9.5-main.pid 2>/dev/null)" ]; do
+    while [ "$(ls -A $DATADIR/postmaster.pid 2>/dev/null)" ]; do
         sleep 1
     done
 }
 
 stop_postgres () {
-    if [ "$(ls -A /var/run/postgresql/9.5-main.pid 2>/dev/null)" ]; then
-        kill -TERM `cat /var/run/postgresql/9.5-main.pid`
+    if [ "$(ls -A $DATADIR/postmaster.pid 2>/dev/null)" ]; then
+        kill -TERM `cat $DATADIR/postmaster.pid`
     fi
 }
 
-kill -TERM `cat /var/run/postgresql/9.5-main.pid`
+kill -TERM `cat $DATADIR/postmaster.pid`
 wait_postgres
 trap 'stop_postgres' TERM
 echo "Postgres initialisation process completed .... restarting in foreground"
@@ -154,3 +150,4 @@ SETVARS="POSTGIS_ENABLE_OUTDB_RASTERS=1 POSTGIS_GDAL_ENABLED_DRIVERS=ENABLE_ALL"
 su - postgres -c "$SETVARS $POSTGRES -D $DATADIR -c config_file=$CONF &"
 sleep 3
 wait_postgres
+# su postgres -c "/usr/lib/postgresql/13/bin/pg_ctl -D /var/lib/postgresql/13/data -l logfile start"
