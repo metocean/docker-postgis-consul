@@ -1,6 +1,6 @@
-FROM postgis/postgis:13-3.3
+FROM kartoza/postgis:9.5-2.2
 
-RUN apt-get -y update && apt-get -y install wget unzip netcat &&\
+RUN apt-get -y update && apt-get -y install wget unzip &&\
     echo "-----------------Install Consul-----------------" &&\
     cd /tmp &&\
     mkdir /consul &&\
